@@ -74,6 +74,7 @@ RUN mkdir -p /tmp/nginx/client_body /tmp/nginx/proxy /tmp/nginx/fastcgi /tmp/ngi
 
 ENV XUI_IN_DOCKER="true"
 ENV XUI_MAIN_FOLDER="/app"
+# DockerEntrypoint.sh disables fail2ban automatically for non-root hosts.
 ENV XUI_ENABLE_FAIL2BAN="true"
 # Lucity ingress listens publicly on HTTPS and forwards privately to this app.
 ENV XUI_PORT="8080"

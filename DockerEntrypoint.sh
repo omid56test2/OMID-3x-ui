@@ -1,7 +1,58 @@
 #!/bin/sh
 
-# Start fail2ban with the 3x-ipl jail
-if [ "$XUI_ENABLE_FAIL2BAN" = "true" ]; then
+# Falix and other restricted container hosts may run this image as a non-root
+# user. In that mode, keep all mutable panel data in the writable home folder,
+# seed the runtime binary folder from the image, and disable host-level
+# fail2ban (it needs root and NET_ADMIN/iptables access).
+if [ "$(id -u)" -ne 0 ]; then
+    if [ -z "${OMID_DATA_DIR:-}" ]; then
+        if [ -n "${HOME:-}" ] && [ -d "$HOME" ] && [ -w "$HOME" ]; then
+            OMID_DATA_DIR="$HOME/omid-data"
+        elif [ -d /home/container ] && [ -w /home/container ]; then
+            OMID_DATA_DIR="/home/container/omid-data"
+        else
+            echo "ERROR: no writable home directory found; set OMID_DATA_DIR to a writable persistent path." >&2
+            exit 1
+        fi
+    fi
+    export XUI_DB_FOLDER="${XUI_DB_FOLDER:-$OMID_DATA_DIR}"
+    export XUI_LOG_FOLDER="${XUI_LOG_FOLDER:-$OMID_DATA_DIR/logs}"
+    export XUI_BIN_FOLDER="${XUI_BIN_FOLDER:-$OMID_DATA_DIR/bin}"
+    export XUI_NODE_TOKEN_KEY_FILE="${XUI_NODE_TOKEN_KEY_FILE:-$OMID_DATA_DIR/node_token_key.json}"
+    export XUI_ENABLE_FAIL2BAN="false"
+
+    for writable_dir in "$XUI_DB_FOLDER" "$XUI_LOG_FOLDER" "$XUI_BIN_FOLDER"; do
+        if ! mkdir -p "$writable_dir" || [ ! -w "$writable_dir" ]; then
+            echo "ERROR: required writable directory is unavailable: $writable_dir" >&2
+            exit 1
+        fi
+    done
+
+    # The image ships Xray, mtg and geodata in /app/bin, which is read-only
+    # under restricted hosts. Copy each asset once so updates to the persistent
+    # copy are not overwritten on every restart.
+    if [ -d /app/bin ]; then
+        for source_file in /app/bin/*; do
+            [ -f "$source_file" ] || continue
+            target_file="$XUI_BIN_FOLDER/${source_file##*/}"
+            if [ ! -e "$target_file" ]; then
+                if ! cp "$source_file" "$target_file"; then
+                    echo "ERROR: failed to copy runtime asset: $source_file" >&2
+                    exit 1
+                fi
+            fi
+        done
+    fi
+
+    for runtime_binary in "$XUI_BIN_FOLDER"/xray-* "$XUI_BIN_FOLDER"/mtg-*; do
+        [ -f "$runtime_binary" ] || continue
+        chmod u+x "$runtime_binary" 2>/dev/null || true
+    done
+fi
+
+# Start fail2ban with the 3x-ipl jail. It is automatically disabled in
+# non-root restricted containers because it requires privileged firewall access.
+if [ "${XUI_ENABLE_FAIL2BAN:-false}" = "true" ]; then
     LOG_FOLDER="${XUI_LOG_FOLDER:-/var/log/x-ui}"
     mkdir -p "$LOG_FOLDER"
     touch "$LOG_FOLDER/3xipl.log" "$LOG_FOLDER/3xipl-banned.log"
@@ -77,7 +128,7 @@ fi
 # on a root crontab entry, but the crontab is lost when the container is
 # recreated and crond was never started. Re-register the job and run crond so
 # renewals actually fire; mount /root/.acme.sh as a volume to keep acme state.
-if [ -f /root/.acme.sh/acme.sh ]; then
+if [ "$(id -u)" -eq 0 ] && [ -f /root/.acme.sh/acme.sh ]; then
     /root/.acme.sh/acme.sh --install-cronjob >/dev/null 2>&1
     crond
 fi
