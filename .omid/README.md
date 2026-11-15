@@ -6,7 +6,7 @@ This repository was initially imported from a source ZIP, so it does not have th
 
 - GitHub Actions (`.github/workflows/sync-upstream.yml`) checks `MHSanaei/3x-ui` every 6 hours (ref from repo variable `UPSTREAM_REF`, default `main`), and can also be started manually.
 - The latest upstream source is cloned fresh.
-- `.omid/scripts/apply_omid_overlay.py` reapplies the small, version-checked OMID overlay: Nginx reverse proxy (public port 2053, inbounds 8081-8090 via `/wsN` `/huN` `/xhN`), `railway.json`, Dockerfile `VOLUME` removal and `PORT=2053` for Railway, stable `/sub/`, `/json/`, `/clash/` paths, public HTTPS subscription URLs, and Telegram subscription URL consistency.
+- `.omid/scripts/apply_omid_overlay.py` reapplies the small, version-checked OMID overlay: Nginx reverse proxy (configurable public listeners via `OMID_RAILWAY_PORTS`, primary port `PORT`, inbounds 8081-8090 via `/wsN` `/huN` `/xhN`), `railway.json`, Dockerfile `VOLUME` removal and `PORT=2053` for Railway, stable `/sub/`, `/json/`, `/clash/` paths, public HTTPS subscription URLs, and Telegram subscription URL consistency.
 - The source tree is synchronized into this repository while preserving `.github/` and `.omid/`.
 - If upstream changed, the source snapshot is committed to `main` and an updated Docker image is published to `ghcr.io/omidiran-gaming/omid-3x-ui:latest`.
 
